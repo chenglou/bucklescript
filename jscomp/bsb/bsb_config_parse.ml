@@ -200,6 +200,7 @@ let interpret_json
   let globbed_dirs = ref [] in
   let bs_file_groups = ref [] in 
   let reason_react_jsx = ref false in 
+  let reason_auto_format = ref false in
 
   let config_json_chan = open_in_bin Literals.bsconfig_json in
   let global_data = Ext_json.parse_json_from_chan config_json_chan  in
@@ -218,7 +219,9 @@ let interpret_json
       |? (Bsb_build_schemas.reason, `Obj begin fun m -> 
           m |? (Bsb_build_schemas.react_jsx, 
                 `Bool (fun b -> reason_react_jsx := b))
-            |> ignore 
+            |? (Bsb_build_schemas.auto_format,
+                `Bool (fun b -> reason_auto_format := b))
+            |> ignore
         end)
       |? (Bsb_build_schemas.generate_merlin, `Bool (fun b ->
           Bsb_default.set_generate_merlin b
@@ -294,9 +297,10 @@ let interpret_json
       files_to_install = String_hash_set.create 96;
       built_in_dependency = !Bsb_default.built_in_package;
       generate_merlin = Bsb_default.get_generate_merlin ();
-      reason_react_jsx = !reason_react_jsx ;  
-    } in 
-  merlin_file_gen 
+      reason_react_jsx = !reason_react_jsx ;
+      reason_auto_format = !reason_auto_format ;
+    } in
+  merlin_file_gen
     (bsc_dir // bsppx_exe,
      bsc_dir // Literals.reactjs_jsx_ppx_exe
     ) config;

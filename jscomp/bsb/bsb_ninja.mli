@@ -84,6 +84,7 @@ val zero : info
 val handle_file_groups : out_channel ->
   package_specs:Bsb_config.package_specs ->  
   js_post_build_cmd:string option -> 
+  reason_auto_format:bool -> 
   files_to_install:String_hash_set.t ->  
   Bsb_build_ui.file_group list ->
   info -> info

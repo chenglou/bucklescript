@@ -89,7 +89,7 @@ module Rules = struct
 
   let build_ast_and_deps_from_reason_impl =
     define
-      ~command:"${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx}  ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -impl ${in}"
+      ~command:"${reason_auto_format} ${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx}  ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -impl ${in}"
       "build_ast_and_deps_from_reason_impl"
 
   let build_ast_and_deps_from_reason_intf =
@@ -97,7 +97,7 @@ module Rules = struct
        because it need to be ppxed by bucklescript
     *)
     define
-      ~command:"${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx} ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -intf ${in}"
+      ~command:"${reason_auto_format} ${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx} ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -intf ${in}"
       "build_ast_and_deps_from_reason_intf"
 
 
@@ -298,7 +298,7 @@ let (++) (us : info) (vs : info) =
 let install_file (file : string) files_to_install =
   String_hash_set.add  files_to_install (Ext_filename.chop_extension_if_any file )
 
-let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc (group: Bsb_build_ui.file_group) : info =
+let handle_file_group oc ~package_specs ~js_post_build_cmd ~reason_auto_format files_to_install acc (group: Bsb_build_ui.file_group) : info =
   let handle_module_info  oc  module_name
       ( module_info : Binary_cache.module_info)
       bs_dependencies
@@ -373,11 +373,20 @@ let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc
               input, Rules.build_ast_and_deps
           in
           begin
+            let shadows2 = 
+              if reason_auto_format then
+                Some [("reason_auto_format",
+                 (* `Overwrite (cmd ^ Ext_string.single_space ^ String.concat Ext_string.single_space output_js ^ " &&")) :: shadows *)
+                 `Overwrite ("${refmt} --in-place " ^ input ^ " &&"))]
+              else None
+            in
             output_build oc
               ~output:output_mlast
               (* ~implicit_outputs:[output_mldeps] *)
               ~input
-              ~rule;
+              ~rule
+              ?shadows:shadows2;
+              
             output_build
               oc
               ~output:output_mlastd
@@ -471,7 +480,10 @@ let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc
 
 
 let handle_file_groups
- oc ~package_specs ~js_post_build_cmd
+  oc 
+  ~package_specs 
+  ~js_post_build_cmd
+  ~reason_auto_format
   ~files_to_install
   (file_groups  :  Bsb_build_ui.file_group list) st =
-  List.fold_left (handle_file_group oc ~package_specs ~js_post_build_cmd files_to_install ) st  file_groups
+  List.fold_left (handle_file_group oc ~package_specs ~js_post_build_cmd ~reason_auto_format files_to_install ) st  file_groups

@@ -370,6 +370,8 @@ let bsc_lib_includes = "bsc_lib_includes"
 let use_stdlib = "use-stdlib"
 let reason = "reason"
 let react_jsx = "react-jsx"
+let auto_format = "auto-format"
+
 end
 module Ext_pervasives : sig 
 #1 "ext_pervasives.mli"
@@ -7322,6 +7324,7 @@ type t =
     files_to_install : String_hash_set.t ;
     generate_merlin : bool ; 
     reason_react_jsx : bool ; (* whether apply PPX transform or not*)
+    reason_auto_format : bool ; (* whether or not to format the file before building it *)
   }
 end
 module Bsb_default : sig 
@@ -7842,6 +7845,7 @@ let interpret_json
   let globbed_dirs = ref [] in
   let bs_file_groups = ref [] in 
   let reason_react_jsx = ref false in 
+  let reason_auto_format = ref false in
 
   let config_json_chan = open_in_bin Literals.bsconfig_json in
   let global_data = Ext_json.parse_json_from_chan config_json_chan  in
@@ -7860,7 +7864,9 @@ let interpret_json
       |? (Bsb_build_schemas.reason, `Obj begin fun m -> 
           m |? (Bsb_build_schemas.react_jsx, 
                 `Bool (fun b -> reason_react_jsx := b))
-            |> ignore 
+            |? (Bsb_build_schemas.auto_format,
+                `Bool (fun b -> reason_auto_format := b))
+            |> ignore
         end)
       |? (Bsb_build_schemas.generate_merlin, `Bool (fun b ->
           Bsb_default.set_generate_merlin b
@@ -7936,9 +7942,10 @@ let interpret_json
       files_to_install = String_hash_set.create 96;
       built_in_dependency = !Bsb_default.built_in_package;
       generate_merlin = Bsb_default.get_generate_merlin ();
-      reason_react_jsx = !reason_react_jsx ;  
-    } in 
-  merlin_file_gen 
+      reason_react_jsx = !reason_react_jsx ;
+      reason_auto_format = !reason_auto_format ;
+    } in
+  merlin_file_gen
     (bsc_dir // bsppx_exe,
      bsc_dir // Literals.reactjs_jsx_ppx_exe
     ) config;
@@ -8277,6 +8284,7 @@ val zero : info
 val handle_file_groups : out_channel ->
   package_specs:Bsb_config.package_specs ->  
   js_post_build_cmd:string option -> 
+  reason_auto_format:bool -> 
   files_to_install:String_hash_set.t ->  
   Bsb_build_ui.file_group list ->
   info -> info
@@ -8376,7 +8384,7 @@ module Rules = struct
 
   let build_ast_and_deps_from_reason_impl =
     define
-      ~command:"${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx}  ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -impl ${in}"
+      ~command:"${reason_auto_format} ${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx}  ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -impl ${in}"
       "build_ast_and_deps_from_reason_impl"
 
   let build_ast_and_deps_from_reason_intf =
@@ -8384,7 +8392,7 @@ module Rules = struct
        because it need to be ppxed by bucklescript
     *)
     define
-      ~command:"${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx} ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -intf ${in}"
+      ~command:"${reason_auto_format} ${bsc} -pp \"${refmt} ${refmt_flags}\" ${reason_react_jsx} ${ppx_flags} ${bsc_flags} -c -o ${out} -bs-syntax-only -bs-binary-ast -intf ${in}"
       "build_ast_and_deps_from_reason_intf"
 
 
@@ -8585,7 +8593,7 @@ let (++) (us : info) (vs : info) =
 let install_file (file : string) files_to_install =
   String_hash_set.add  files_to_install (Ext_filename.chop_extension_if_any file )
 
-let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc (group: Bsb_build_ui.file_group) : info =
+let handle_file_group oc ~package_specs ~js_post_build_cmd ~reason_auto_format files_to_install acc (group: Bsb_build_ui.file_group) : info =
   let handle_module_info  oc  module_name
       ( module_info : Binary_cache.module_info)
       bs_dependencies
@@ -8660,11 +8668,20 @@ let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc
               input, Rules.build_ast_and_deps
           in
           begin
+            let shadows2 = 
+              if reason_auto_format then
+                Some [("reason_auto_format",
+                 (* `Overwrite (cmd ^ Ext_string.single_space ^ String.concat Ext_string.single_space output_js ^ " &&")) :: shadows *)
+                 `Overwrite ("${refmt} --in-place " ^ input ^ " &&"))]
+              else None
+            in
             output_build oc
               ~output:output_mlast
               (* ~implicit_outputs:[output_mldeps] *)
               ~input
-              ~rule;
+              ~rule
+              ?shadows:shadows2;
+              
             output_build
               oc
               ~output:output_mlastd
@@ -8758,10 +8775,13 @@ let handle_file_group oc ~package_specs ~js_post_build_cmd  files_to_install acc
 
 
 let handle_file_groups
- oc ~package_specs ~js_post_build_cmd
+  oc 
+  ~package_specs 
+  ~js_post_build_cmd
+  ~reason_auto_format
   ~files_to_install
   (file_groups  :  Bsb_build_ui.file_group list) st =
-  List.fold_left (handle_file_group oc ~package_specs ~js_post_build_cmd files_to_install ) st  file_groups
+  List.fold_left (handle_file_group oc ~package_specs ~js_post_build_cmd ~reason_auto_format files_to_install ) st  file_groups
 
 end
 module Bsb_gen : sig 
@@ -8865,7 +8885,8 @@ let output_ninja
     bs_file_groups;
     files_to_install;
     built_in_dependency;
-    reason_react_jsx
+    reason_react_jsx;
+    reason_auto_format;
     }
   =
   let bsc = bsc_dir // bsc_exe in   (* The path to [bsc.exe] independent of config  *)
@@ -8955,7 +8976,7 @@ let output_ninja
     in
     let all_info =
       Bsb_ninja.handle_file_groups oc
-        ~js_post_build_cmd  ~package_specs ~files_to_install bs_file_groups Bsb_ninja.zero  in
+        ~js_post_build_cmd ~reason_auto_format ~package_specs ~files_to_install bs_file_groups Bsb_ninja.zero  in
     let () =
       List.iter (fun x -> Bsb_ninja.output_build oc
                     ~output:x

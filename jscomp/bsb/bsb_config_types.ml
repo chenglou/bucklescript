@@ -53,4 +53,5 @@ type t =
     files_to_install : String_hash_set.t ;
     generate_merlin : bool ; 
     reason_react_jsx : bool ; (* whether apply PPX transform or not*)
+    reason_auto_format : bool ; (* whether or not to format the file before building it *)
   }
