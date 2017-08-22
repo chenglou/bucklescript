@@ -46,11 +46,11 @@ let report_error env ppf = function
         (Ident.name id)
   | Expr_type_clash trace ->
       (* modified *) 
-      report_unification_error ppf env trace
+      Super_printtyp.report_unification_error ppf env trace
         (function ppf ->
-           fprintf ppf "@{<error>This is:@}")
+           fprintf ppf "This is:")
         (function ppf ->
-           fprintf ppf "@{<info>but somewhere wanted:@}")
+           fprintf ppf "But somewhere wanted:")
   | Apply_non_function typ ->
       (* modified *)
       reset_and_mark_loops typ;
