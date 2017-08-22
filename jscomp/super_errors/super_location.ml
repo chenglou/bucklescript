@@ -81,7 +81,7 @@ let print ~is_warning intro ppf loc =
     end
 ;;
 
-(* taken from https://github.com/ocaml/ocaml/blob/4.02/parsing/location.ml#L337 *)
+(* taken from https://github.com/BuckleScript/ocaml/blob/d4144647d1bf9bc7dc3aadc24c25a7efa3a67915/parsing/location.ml#L380 *)
 (* This is the error report entry point. We'll replace the default reporter with this one. *)
 let rec super_error_reporter ppf ({Location.loc; msg; sub; if_highlight} as err) =
   let highlighted =
@@ -104,7 +104,7 @@ let rec super_error_reporter ppf ({Location.loc; msg; sub; if_highlight} as err)
     (* no need to flush here; location's report_exception (which uses this ultimately) flushes *)
   end
 
-(* extracted from https://github.com/ocaml/ocaml/blob/4.02/parsing/location.ml#L280 *)
+(* extracted from https://github.com/BuckleScript/ocaml/blob/d4144647d1bf9bc7dc3aadc24c25a7efa3a67915/parsing/location.ml#L299 *)
 (* This is the warning report entry point. We'll replace the default printer with this one *)
 let super_warning_printer loc ppf w =
   if Warnings.is_active w then begin
@@ -119,7 +119,7 @@ let super_warning_printer loc ppf w =
   end
 ;;
 
-(* extracted from https://github.com/ocaml/ocaml/blob/4.03/parsing/location.ml#L347 *) 
+(* taken from https://github.com/BuckleScript/ocaml/blob/d4144647d1bf9bc7dc3aadc24c25a7efa3a67915/parsing/location.ml#L337 *) 
 let pp_ksprintf ?before k fmt =
   let buf = Buffer.create 64 in
   let ppf = Format.formatter_of_buffer buf in
@@ -136,8 +136,14 @@ let pp_ksprintf ?before k fmt =
       k msg)
     ppf fmt
 
+let print_phanton_error_prefix ppf =
+  (* modified from the original. We use only 2 indentations for error report
+    (see super_error_reporter above) *)
+  Format.pp_print_as ppf 2 ""
+
 let errorf ?(loc = none) ?(sub = []) ?(if_highlight = "") fmt =
   pp_ksprintf
+    ~before:print_phanton_error_prefix
     (fun msg -> {loc; msg; sub; if_highlight})
     fmt
 
