@@ -28,7 +28,7 @@ let file_lines filePath =
     end
 
 let setup_colors () =
-  Misc.Color.setup !Clflags.color
+  Super_misc.Color.setup !Clflags.color
 
 let print_filename ppf file =
   Format.fprintf ppf "%s" (Location.show_filename file)
@@ -97,7 +97,7 @@ let rec super_error_reporter ppf ({Location.loc; msg; sub; if_highlight} as err)
   if highlighted then
     Format.pp_print_string ppf if_highlight
   else begin
-    Super_misc.setup_colors ppf;
+    (* this is the modified part *)
     (* open a vertical box. Everything in our message is indented 2 spaces *)
     Format.fprintf ppf "@[<v 2>@,%a@,%s@,@]" (print ~is_warning:false "We've found a bug for you!") loc msg;
     List.iter (Format.fprintf ppf "@,@[%a@]" super_error_reporter) sub;
@@ -108,8 +108,8 @@ let rec super_error_reporter ppf ({Location.loc; msg; sub; if_highlight} as err)
 (* This is the warning report entry point. We'll replace the default printer with this one *)
 let super_warning_printer loc ppf w =
   if Warnings.is_active w then begin
-    Super_misc.setup_colors ppf;
-    Misc.Color.setup !Clflags.color;
+    setup_colors ();
+    (* this is the modified part *)
     (* open a vertical box. Everything in our message is indented 2 spaces *)
     Format.fprintf ppf "@[<v 2>@,%a@,%a@,@]" 
       (print ~is_warning:true ("Warning number " ^ (Super_warnings.number w |> string_of_int))) 
@@ -118,6 +118,31 @@ let super_warning_printer loc ppf w =
       w
   end
 ;;
+
+(* extracted from https://github.com/ocaml/ocaml/blob/4.03/parsing/location.ml#L347 *) 
+let pp_ksprintf ?before k fmt =
+  let buf = Buffer.create 64 in
+  let ppf = Format.formatter_of_buffer buf in
+  (* this is the modified part *)
+  Super_misc.Color.set_color_tag_handling ppf;
+  begin match before with
+    | None -> ()
+    | Some f -> f ppf
+  end;
+  kfprintf
+    (fun _ ->
+      pp_print_flush ppf ();
+      let msg = Buffer.contents buf in
+      k msg)
+    ppf fmt
+
+let errorf ?(loc = none) ?(sub = []) ?(if_highlight = "") fmt =
+  pp_ksprintf
+    (fun msg -> {loc; msg; sub; if_highlight})
+    fmt
+
+let error_of_printer loc print x =
+  errorf ~loc "%a@?" print x
 
 (* This will be called in super_main. This is how you override the default error and warning printers *)
 let setup () =

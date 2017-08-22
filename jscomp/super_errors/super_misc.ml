@@ -130,9 +130,43 @@ ppf
   done;
   fprintf ppf "@]" (* v *)
 
-let setup_colors ppf =
-  Format.pp_set_formatter_tag_functions ppf
-    ({ (Format.pp_get_formatter_tag_functions ppf () ) with
+
+(* This is taken from https://github.com/ocaml/ocaml/blob/4.03/utils/misc.ml#L512 *)
+(* We're overriding the minimum necessary in order to inject our own coloring
+  handling, e.g. color tags from Ext_color *)
+module Color = struct
+  let color_enabled = ref true
+
+  (* add color handling to formatter [ppf] *)
+  let set_color_tag_handling ppf =
+    let open Format in
+    let functions = pp_get_formatter_tag_functions ppf () in
+    (* this binding is the only changed part. We swap out the default color
+      tags with ours. Ours are a slightly richer; check Ext_color.style_of_tag
+      for more info *)
+    let functions' = {functions with
       mark_open_tag = Ext_color.ansi_of_tag;
       mark_close_tag = (fun _ -> Ext_color.reset_lit);
-    })
+    } in
+    pp_set_mark_tags ppf true; (* enable tags *)
+    pp_set_formatter_tag_functions ppf functions'
+
+  (* reasonable heuristic on whether colors should be enabled *)
+  let should_enable_color () = false  
+
+  let setup =
+    let first = ref true in (* initialize only once *)
+    let formatter_l = [Format.std_formatter; Format.err_formatter; Format.str_formatter] in
+    fun o ->
+      if !first then (
+        first := false;
+        Format.set_mark_tags true;
+        List.iter set_color_tag_handling formatter_l;
+        color_enabled := (match o with
+          | Clflags.Always -> true
+          | Clflags.Auto -> should_enable_color ()
+          | Clflags.Never -> false
+        )
+      );
+      ()
+end

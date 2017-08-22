@@ -45,7 +45,7 @@ let report_error env ppf = function
       fprintf ppf "Variable %s must occur on both sides of this | pattern"
         (Ident.name id)
   | Expr_type_clash trace ->
-      (* modified *)
+      (* modified *) 
       report_unification_error ppf env trace
         (function ppf ->
            fprintf ppf "@{<error>This is:@}")
@@ -233,7 +233,6 @@ let report_error env ppf = function
 
 (* https://github.com/ocaml/ocaml/blob/4.02/typing/typecore.ml#L3979 *)
 let report_error env ppf err =
-  Super_misc.setup_colors ppf;
   wrap_printing_env env (fun () -> report_error env ppf err)
 
 (* This will be called in super_main. This is how you'd override the default error printer from the compiler & register new error_of_exn handlers *)
@@ -241,7 +240,7 @@ let setup () =
   Location.register_error_of_exn
     (function
       | Typecore.Error (loc, env, err) ->
-        Some (Location.error_of_printer loc (report_error env) err)
+        Some (Super_location.error_of_printer loc (report_error env) err)
       | Typecore.Error_forward err ->
         Some err
       | _ ->
